@@ -6,89 +6,98 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  Modal,
   Alert,
+  Modal,
   SafeAreaView,
   StatusBar,
   ScrollView,
 } from 'react-native';
 
-const KATEGORILER = ['Yazılım / Sistem', 'Donanım / Cihaz', 'Ağ / İnternet'];
+// Kategori ve Durum Sabitleri
+const KATEGORILER = ['Yazılım / Sistem', 'Donanım / Ağ', 'Fiziksel / Ekipman'];
 const DURUMLAR = ['Bekliyor', 'İşlemde', 'Tamamlandı'];
 
 export default function App() {
   // --- STATE YÖNETİMİ ---
+  // Ekran Yönetimi: 'LISTE' | 'FORM'
+  const [aktifEkran, setAktifEkran] = useState('LISTE');
+
+  // Arıza Talepleri Listesi (G4)
   const [talepler, setTalepler] = useState([
     {
       id: '1',
-      baslik: 'E-posta Erişimi Sorunu',
-      aciklama: 'Kurumsal e-posta hesabıma giriş yapamıyorum.',
-      kategori: 'Yazılım / Sistem',
+      baslik: 'Yazıcı Bağlantı Hatası',
+      aciklama: '3. kat yazıcısına ağ üzerinden erişilemiyor.',
+      kategori: 'Donanım / Ağ',
       durum: 'Bekliyor',
-      tarih: new Date().toLocaleDateString('tr-TR'),
+      tarih: '20.10.2026 09:30',
+    },
+    {
+      id: '2',
+      baslik: 'E-Posta Senkronizasyon Sorunu',
+      aciklama: 'Gelen kutusu güncellenmiyor, hata veriyor.',
+      kategori: 'Yazılım / Sistem',
+      durum: 'İşlemde',
+      tarih: '20.10.2026 10:15',
     },
   ]);
 
-  // Form State'leri
+  // Form State'leri (G1, G2)
   const [baslik, setBaslik] = useState('');
   const [aciklama, setAciklama] = useState('');
   const [secilenKategori, setSecilenKategori] = useState(KATEGORILER[0]);
 
-  // Filtreleme State'leri (Özgün Özellik)
+  // Detay Modalı State'i (G5)
+  const [secilenTalep, setSecilenTalep] = useState(null);
+  const [detayModalAcik, setDetayModalAcik] = useState(false);
+
+  // Özgün Özellik State'leri (Arama & Filtreleme)
   const [aramaMetni, setAramaMetni] = useState('');
   const [filtreDurum, setFiltreDurum] = useState('Tümü');
 
-  // Modal (Detay ve Düzenleme) State'leri
-  const [seciliTalep, setSeciliTalep] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
+  // --- İŞLEVLER / HANDLER'LAR ---
 
-  // --- EYLEMLER VE EVENT HANDLER'LAR ---
-
-  // G1, G2, G3, G4 & G8: Talep Ekleme ve Doğrulama (Validation)
+  // G3 & G4 & G8: Yeni Talep Ekleme ve Doğrulama
   const handleTalepEkle = () => {
-    // Sadece boşluk veya boş girdi kontrolü (G3)
+    // Boşluk kontrolü (G3)
     if (!baslik.trim() || !aciklama.trim()) {
-      Alert.alert('Uyarı', 'Lütfen başlık ve açıklama alanlarını doldurunuz!');
+      Alert.alert('Hata', 'Lütfen başlık ve açıklama alanlarını doldurunuz!'); // G8
       return;
     }
 
     const yeniTalep = {
-      id: Date.now().toString(), // Benzersiz ID
+      id: Date.now().toString(),
       baslik: baslik.trim(),
       aciklama: aciklama.trim(),
       kategori: secilenKategori,
       durum: 'Bekliyor',
-      tarih: new Date().toLocaleDateString('tr-TR'),
+      tarih: new Date().toLocaleString('tr-TR'),
     };
 
     setTalepler([yeniTalep, ...talepler]);
+    
+    // Formu temizle ve geri dön
     setBaslik('');
     setAciklama('');
     setSecilenKategori(KATEGORILER[0]);
-    
-    // Kullanıcıya geri bildirim (G8)
-    Alert.alert('Başarılı', 'Arıza talebiniz başarıyla oluşturuldu.');
+    setAktifEkran('LISTE');
+
+    Alert.alert('Başarılı', 'Arıza talebiniz başarıyla oluşturuldu.'); // G8
   };
 
-  // G5: Kısa Dokunma ile Detay Gösterme
-  const handleTalepSec = (item) => {
-    setSeciliTalep(item);
-    setModalVisible(true);
-  };
-
-  // G6 & G8: Uzun Basma ile Silme Onayı
-  const handleUzunBasma = (item) => {
+  // G6 & G8: Uzun Basma İle Silme Onayı
+  const handleUzunBasmaSil = (id) => {
     Alert.alert(
-      'Talep Silme Onayı',
-      `"${item.baslik}" başlıklı talebi silmek istediğinize emin misiniz?`,
+      'Talebi Sil',
+      'Bu arıza talebini silmek istediğinize emin misiniz?',
       [
         { text: 'Vazgeç', style: 'cancel' },
         {
           text: 'Sil',
           style: 'destructive',
           onPress: () => {
-            setTalepler((prev) => prev.filter((t) => t.id !== item.id));
-            Alert.alert('Bilgi', 'Talep silindi.');
+            setTalepler((prev) => prev.filter((t) => t.id !== id));
+            Alert.alert('Bilgi', 'Talep başarıyla silindi.');
           },
         },
       ]
@@ -96,194 +105,245 @@ export default function App() {
   };
 
   // G7: Durum Değiştirme
-  const handleDurumDegistir = (yeniDurum) => {
-    if (!seciliTalep) return;
-
-    const guncelTalepler = talepler.map((item) => {
-      if (item.id === seciliTalep.id) {
-        return { ...item, durum: yeniDurum };
-      }
-      return item;
-    });
-
-    setTalepler(guncelTalepler);
-    setSeciliTalep({ ...seciliTalep, durum: yeniDurum });
-    Alert.alert('Güncellendi', `Talep durumu "${yeniDurum}" olarak değiştirildi.`);
+  const handleDurumDegistir = (id, yeniDurum) => {
+    setTalepler((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, durum: yeniDurum } : t))
+    );
+    if (secilenTalep && secilenTalep.id === id) {
+      setSecilenTalep((prev) => ({ ...prev, durum: yeniDurum }));
+    }
   };
 
-  // --- D ÖZGÜN ÖZELLİK: ARAMA, DURUM FİLTRELEME VE ANLIK İSTATİSTİK ---
+  // G5: Kısa Dokunmada Detay Açma
+  const handleTalepDetayAc = (item) => {
+    setSecilenTalep(item);
+    setDetayModalAcik(true);
+  };
+
+  // Özgün Özellik: Filtrelenmiş Talepler
   const filtrelenmisTalepler = talepler.filter((t) => {
-    const aramaUyum = t.baslik.toLowerCase().includes(aramaMetni.toLowerCase());
-    const durumUyum = filtreDurum === 'Tümü' || t.durum === filtreDurum;
-    return aramaUyum && durumUyum;
+    const baslikEslosiyor = t.baslik.toLowerCase().includes(aramaMetni.toLowerCase());
+    const durumEslosiyor = filtreDurum === 'Tümü' || t.durum === filtreDurum;
+    return baslikEslosiyor && durumEslosiyor;
   });
 
+  // Özgün Özellik: Tamamlanan/Toplam İstatistikleri
   const tamamlananSayisi = talepler.filter((t) => t.durum === 'Tamamlandı').length;
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.appTitle}>🛠️ Akıllı Arıza Yönetimi</Text>
+  // --- EKRAN BİLEŞENLERİ ---
 
-        {/* --- FORM ALANI (G1, G2, G3, G4) --- */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Yeni Arıza Bildirimi</Text>
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Arıza Başlığı (Örn: Ekran Kırık)"
-            value={baslik}
-            onChangeText={setBaslik}
-          />
+  // 1. TALEP LİSTESİ EKRANI
+  const renderListeEkrani = () => (
+    <View style={styles.container}>
+      {/* İstatistik Paneli (Özgün Özellik) */}
+      <View style={styles.statsCard}>
+        <View>
+          <Text style={styles.statsTitle}>Toplam Talep</Text>
 
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Arıza Açıklaması..."
-            value={aciklama}
-            onChangeText={setAciklama}
-            multiline
-            numberOfLines={3}
-          />
-
-          <Text style={styles.label}>Kategori Seçiniz:</Text>
-          <View style={styles.chipContainer}>
-            {KATEGORILER.map((kat) => (
-              <TouchableOpacity
-                key={kat}
-                style={[
-                  styles.chip,
-                  secilenKategori === kat && styles.selectedChip,
-                ]}
-                onPress={() => setSecilenKategori(kat)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    secilenKategori === kat && styles.selectedChipText,
-                  ]}
-                >
-                  {kat}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity style={styles.primaryButton} onPress={handleTalepEkle}>
-            <Text style={styles.buttonText}>Talep Oluştur</Text>
-          </TouchableOpacity>
+          <Text style={styles.statsCount}>{talepler.length}</Text>
         </View>
-
-        {/* --- ÖZGÜN ÖZELLİK: İSTATİSTİK & FİLTRELEME --- */}
-        <View style={styles.card}>
-          <View style={styles.statsRow}>
-            <Text style={styles.statsText}>Toplam: {talepler.length}</Text>
-            <Text style={[styles.statsText, { color: '#2e7d32' }]}>
-              Tamamlanan: {tamamlananSayisi}
-            </Text>
-          </View>
-
-          <TextInput
-            style={styles.searchInput}
-            placeholder="🔍 Başlığa göre arayın..."
-            value={aramaMetni}
-            onChangeText={setAramaMetni}
-          />
-
-          <View style={styles.filterRow}>
-            {['Tümü', ...DURUMLAR].map((durum) => (
-              <TouchableOpacity
-                key={durum}
-                style={[
-                  styles.filterBadge,
-                  filtreDurum === durum && styles.activeFilterBadge,
-                ]}
-                onPress={() => setFiltreDurum(durum)}
-              >
-                <Text
-                  style={[
-                    styles.filterBadgeText,
-                    filtreDurum === durum && styles.activeFilterBadgeText,
-                  ]}
-                >
-                  {durum}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        <View style={styles.statsDivider} />
+        <View>
+          <Text style={styles.statsTitle}>Tamamlanan</Text>
+          <Text style={[styles.statsCount, { color: '#10B981' }]}>{tamamlananSayisi}</Text>
         </View>
+        <TouchableOpacity
+          style={styles.newBtnHeader}
+          onPress={() => setAktifEkran('FORM')}
+        >
+          <Text style={styles.newBtnText}>+ Yeni</Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* --- İSTEK LİSTESİ (G5, G6) --- */}
-        <Text style={styles.sectionHeader}>Arıza Talepleri</Text>
-        {filtrelenmisTalepler.length === 0 ? (
-          <Text style={styles.emptyText}>Kayıtlı arıza talebi bulunamadı.</Text>
-        ) : (
-          filtrelenmisTalepler.map((item) => (
+      {/* Arama ve Filtreleme Alanı */}
+      <View style={styles.filterContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Başlık ile ara..."
+          placeholderTextColor="#9CA3AF"
+          value={aramaMetni}
+          onChangeText={setAramaMetni}
+        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScrollView}>
+          {['Tümü', ...DURUMLAR].map((durum) => (
             <TouchableOpacity
-              key={item.id}
-              style={styles.ticketCard}
-              onPress={() => handleTalepSec(item)}
-              onLongPress={() => handleUzunBasma(item)}
-              delayLongPress={500}
+              key={durum}
+              style={[
+                styles.chip,
+                filtreDurum === durum && styles.chipActive,
+              ]}
+              onPress={() => setFiltreDurum(durum)}
             >
-              <View style={styles.ticketHeader}>
-                <Text style={styles.ticketTitle}>{item.baslik}</Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    item.durum === 'Bekliyor' && { backgroundColor: '#ffe0b2' },
-                    item.durum === 'İşlemde' && { backgroundColor: '#bbdefb' },
-                    item.durum === 'Tamamlandı' && { backgroundColor: '#c8e6c9' },
-                  ]}
-                >
-                  <Text style={styles.statusBadgeText}>{item.durum}</Text>
-                </View>
-              </View>
-              <Text style={styles.ticketCategory}>🏷️ {item.kategori}</Text>
-              <Text numberOfLines={1} style={styles.ticketDesc}>
-                {item.aciklama}
+              <Text style={[styles.chipText, filtreDurum === durum && styles.chipTextActive]}>
+                {durum}
               </Text>
-              <Text style={styles.ticketDate}>📅 {item.tarih}</Text>
             </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+          ))}
+        </ScrollView>
+      </View>
 
-      {/* --- DETAY VE DURUM DEĞİŞTİRME MODALI (G5, G7) --- */}
+      {/* Talep Listesi */}
+      <FlatList
+        data={filtrelenmisTalepler}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>Henüz gösterilecek arıza talebi yok.</Text>
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => handleTalepDetayAc(item)} // G5
+            onLongPress={() => handleUzunBasmaSil(item.id)} // G6
+            activeOpacity={0.7}
+          >
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>{item.baslik}</Text>
+              <View
+                style={[
+                  styles.badge,
+                  item.durum === 'Bekliyor' && { backgroundColor: '#F59E0B' },
+                  item.durum === 'İşlemde' && { backgroundColor: '#3B82F6' },
+                  item.durum === 'Tamamlandı' && { backgroundColor: '#10B981' },
+                ]}
+              >
+                <Text style={styles.badgeText}>{item.durum}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.cardDesc} numberOfLines={2}>
+              {item.aciklama}
+            </Text>
+
+            <View style={styles.cardFooter}>
+              <Text style={styles.categoryText}>📁 {item.kategori}</Text>
+              <Text style={styles.dateText}>{item.tarih}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+
+  // 2. YENİ TALEP OLUŞTURMA FORM EKRANI
+  const renderFormEkrani = () => (
+    <ScrollView style={styles.container}>
+      <View style={styles.formCard}>
+        <Text style={styles.formTitle}>Yeni Arıza Talebi</Text>
+
+        <Text style={styles.label}>Arıza Başlığı *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Örn: Bilgisayar Açılmıyor"
+          placeholderTextColor="#6B7280"
+          value={baslik}
+          onChangeText={setBaslik}
+        />
+
+        <Text style={styles.label}>Kategori Seçin *</Text>
+        <View style={styles.categoryContainer}>
+          {KATEGORILER.map((kat) => (
+            <TouchableOpacity
+              key={kat}
+              style={[
+                styles.categoryRadio,
+                secilenKategori === kat && styles.categoryRadioSelected,
+              ]}
+              onPress={() => setSecilenKategori(kat)}
+            >
+              <Text
+                style={[
+                  styles.categoryRadioText,
+                  secilenKategori === kat && styles.categoryRadioTextSelected,
+                ]}
+              >
+                {kat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Açıklama *</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Detaylı açıklama yazınız..."
+          placeholderTextColor="#6B7280"
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+          value={aciklama}
+          onChangeText={setAciklama}
+        />
+
+        {/* Butonlar */}
+        <TouchableOpacity style={styles.saveButton} onPress={handleTalepEkle}>
+          <Text style={styles.saveButtonText}>Kaydet</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => setAktifEkran('LISTE')}
+        >
+          <Text style={styles.cancelButtonText}>Vazgeç / Liste</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
+      
+      {/* Üst Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Akıllı Arıza Takibi</Text>
+      </View>
+
+      {/* Ekran Geçiş Kontrolü */}
+      {aktifEkran === 'LISTE' ? renderListeEkrani() : renderFormEkrani()}
+
+      {/* G5 & G7: Talebe Kısa Basınca Açılan Detay Modalı */}
       <Modal
-        animationType="slide"
+        visible={detayModalAcik}
         transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        animationType="slide"
+        onRequestClose={() => setDetayModalAcik(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {seciliTalep && (
+            {secilenTalep && (
               <>
-                <Text style={styles.modalTitle}>{seciliTalep.baslik}</Text>
-                <Text style={styles.modalCategory}>
-                  Kategori: {seciliTalep.kategori}
-                </Text>
-
-                <View style={styles.modalDescBox}>
-                  <Text style={styles.modalDescText}>{seciliTalep.aciklama}</Text>
+                <Text style={styles.modalTitle}>{secilenTalep.baslik}</Text>
+                
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Kategori:</Text>
+                  <Text style={styles.modalValue}>{secilenTalep.kategori}</Text>
                 </View>
 
-                <Text style={styles.label}>Durumu Güncelle (G7):</Text>
-                <View style={styles.statusButtonContainer}>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Tarih:</Text>
+                  <Text style={styles.modalValue}>{secilenTalep.tarih}</Text>
+                </View>
+
+                <Text style={[styles.modalLabel, { marginTop: 10 }]}>Açıklama:</Text>
+                <Text style={styles.modalDesc}>{secilenTalep.aciklama}</Text>
+
+                {/* G7: Durum Güncelleme Butonları */}
+                <Text style={[styles.modalLabel, { marginTop: 15 }]}>Durumu Güncelle:</Text>
+                <View style={styles.durumBtnContainer}>
                   {DURUMLAR.map((durum) => (
                     <TouchableOpacity
                       key={durum}
                       style={[
-                        styles.statusSelectButton,
-                        seciliTalep.durum === durum && styles.activeStatusSelect,
+                        styles.durumBtn,
+                        secilenTalep.durum === durum && styles.durumBtnActive,
                       ]}
-                      onPress={() => handleDurumDegistir(durum)}
+                      onPress={() => handleDurumDegistir(secilenTalep.id, durum)}
                     >
                       <Text
                         style={[
-                          styles.statusSelectText,
-                          seciliTalep.durum === durum && styles.activeStatusSelectText,
+                          styles.durumBtnText,
+                          secilenTalep.durum === durum && styles.durumBtnTextActive,
                         ]}
                       >
                         {durum}
@@ -293,10 +353,10 @@ export default function App() {
                 </View>
 
                 <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setModalVisible(false)}
+                  style={styles.closeModalBtn}
+                  onPress={() => setDetayModalAcik(false)}
                 >
-                  <Text style={styles.closeButtonText}>Kapat</Text>
+                  <Text style={styles.closeModalBtnText}>Kapat</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -307,250 +367,305 @@ export default function App() {
   );
 }
 
-// --- STYLES ---
+// --- STİLLER (Modern Dark Theme) ---
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#111827',
+  },
+  header: {
+    padding: 16,
+    backgroundColor: '#1F2937',
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#F9FAFB',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f4f6f8',
-  },
-  scrollContainer: {
     padding: 16,
   },
-  appTitle: {
+  // İstatistik Kartı
+  statsCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1F2937',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  statsTitle: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  statsCount: {
+    color: '#F9FAFB',
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1a237e',
-    textAlign: 'center',
-    marginVertical: 12,
   },
+  statsDivider: {
+    width: 1,
+    height: '80%',
+    backgroundColor: '#374151',
+  },
+  newBtnHeader: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  newBtnText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+  // Arama & Filtre
+  filterContainer: {
+    marginBottom: 16,
+  },
+  searchInput: {
+    backgroundColor: '#1F2937',
+    color: '#FFF',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+    marginBottom: 10,
+  },
+  chipScrollView: {
+    flexDirection: 'row',
+  },
+  chip: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  chipActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  chipText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  chipTextActive: {
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+  // Talep Kartları
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1F2937',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    backgroundColor: '#fafafa',
-  },
-  textArea: {
-    height: 70,
-    textAlignVertical: 'top',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginVertical: 6,
-    color: '#555',
-  },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  chip: {
-    backgroundColor: '#e0e0e0',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    marginBottom: 6,
-  },
-  selectedChip: {
-    backgroundColor: '#1a237e',
-  },
-  chipText: {
-    fontSize: 12,
-    color: '#333',
-  },
-  selectedChipText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  primaryButton: {
-    backgroundColor: '#1a237e',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  statsText: {
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 8,
-    backgroundColor: '#fff',
-    marginBottom: 10,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  filterBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: '#eee',
-  },
-  activeFilterBadge: {
-    backgroundColor: '#00796b',
-  },
-  filterBadgeText: {
-    fontSize: 12,
-    color: '#444',
-  },
-  activeFilterBadgeText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  sectionHeader: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#888',
-    marginTop: 20,
-  },
-  ticketCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#1a237e',
-    elevation: 1,
-  },
-  ticketHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ticketTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#222',
+    color: '#F3F4F6',
     flex: 1,
   },
-  statusBadge: {
-    paddingHorizontal: 8,
+  badge: {
     paddingVertical: 4,
+    paddingHorizontal: 8,
     borderRadius: 6,
   },
-  statusBadgeText: {
-    fontSize: 11,
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
     fontWeight: 'bold',
   },
-  ticketCategory: {
+  cardDesc: {
+    color: '#D1D5DB',
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#374151',
+    paddingTop: 8,
+  },
+  categoryText: {
+    color: '#9CA3AF',
     fontSize: 12,
-    color: '#666',
-    marginVertical: 4,
   },
-  ticketDesc: {
-    fontSize: 13,
-    color: '#444',
+  dateText: {
+    color: '#6B7280',
+    fontSize: 12,
   },
-  ticketDate: {
-    fontSize: 10,
-    color: '#999',
-    marginTop: 6,
-    textAlign: 'right',
+  emptyText: {
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 40,
   },
+  // Form Stilleri
+  formCard: {
+    backgroundColor: '#1F2937',
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 16,
+  },
+  label: {
+    color: '#D1D5DB',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  input: {
+    backgroundColor: '#111827',
+    color: '#FFF',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+    marginBottom: 16,
+  },
+  textArea: {
+    height: 100,
+  },
+  categoryContainer: {
+    marginBottom: 16,
+  },
+  categoryRadio: {
+    backgroundColor: '#111827',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+    marginBottom: 8,
+  },
+  categoryRadioSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#1E3A8A',
+  },
+  categoryRadioText: {
+    color: '#9CA3AF',
+  },
+  categoryRadioTextSelected: {
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+  saveButton: {
+    backgroundColor: '#2563EB',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  cancelButton: {
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cancelButtonText: {
+    color: '#9CA3AF',
+  },
+  // Modal Stilleri
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1F2937',
     borderRadius: 12,
     padding: 20,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#374151',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  modalCategory: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 10,
-  },
-  modalDescBox: {
-    backgroundColor: '#f9f9f9',
-    padding: 10,
-    borderRadius: 8,
+    color: '#FFF',
     marginBottom: 16,
   },
-  modalDescText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  statusButtonContainer: {
+  modalRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 10,
+    marginBottom: 8,
   },
-  statusSelectButton: {
-    flex: 1,
-    paddingVertical: 8,
-    marginHorizontal: 2,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  activeStatusSelect: {
-    backgroundColor: '#1a237e',
-    borderColor: '#1a237e',
-  },
-  statusSelectText: {
-    fontSize: 12,
-    color: '#333',
-  },
-  activeStatusSelectText: {
-    color: '#fff',
+  modalLabel: {
+    color: '#9CA3AF',
+    width: 90,
     fontWeight: 'bold',
   },
-  closeButton: {
-    marginTop: 12,
-    backgroundColor: '#d32f2f',
+  modalValue: {
+    color: '#F3F4F6',
+    flex: 1,
+  },
+  modalDesc: {
+    color: '#D1D5DB',
+    backgroundColor: '#111827',
     padding: 10,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  durumBtnContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  durumBtn: {
+    flex: 1,
+    backgroundColor: '#111827',
+    paddingVertical: 8,
+    marginHorizontal: 2,
+    borderRadius: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  durumBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  durumBtnText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+  },
+  durumBtnTextActive: {
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+  closeModalBtn: {
+    backgroundColor: '#374151',
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  closeButtonText: {
-    color: '#fff',
+  closeModalBtnText: {
+    color: '#FFF',
     fontWeight: 'bold',
   },
 });
